@@ -96,18 +96,14 @@ class AmadeusZeroTinyBlock(nn.Module):
         q, k = apply_rotary_emb(q, k, cos, sin, position_ids)
 
         # --------------------------------------------------------
-        # OPTIMIZATION FOR RTX 3060: Vectorized GQA
-        # Instead of a Python for-loop which is slow and launches
-        # multiple CUDA kernels, we use repeat_interleave to duplicate
-        # the KV heads. This allows a single scaled_dot_product_attention
-        # call, which PyTorch will automatically route to ultra-fast
-        # FlashAttention kernels on Ampere GPUs.
+        # OPTIMIZATION FOR RTX 3060: Native PyTorch GQA
+        # PyTorch's SDPA natively supports Grouped-Query Attention
+        # via the `enable_gqa=True` flag. This cleanly delegates the
+        # expansion logic to optimized backend kernels without the
+        # need for explicit python-level repeat_interleave.
         # --------------------------------------------------------
-        if self.n_kv_head < self.n_head:
-            k = k.repeat_interleave(self.num_key_value_groups, dim=1)
-            v = v.repeat_interleave(self.num_key_value_groups, dim=1)
-
-        y = F.scaled_dot_product_attention(q, k, v, is_causal=True)
+        is_gqa = self.n_kv_head < self.n_head
+        y = F.scaled_dot_product_attention(q, k, v, is_causal=True, enable_gqa=is_gqa)
         # --------------------------------------------------------
 
         y = y.transpose(1, 2).contiguous().view(B, T, C)
