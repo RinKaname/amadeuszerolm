@@ -10,7 +10,7 @@ class Config:
     vocab_size: int = 50257
     block_size: int = 512
     n_layer: int = 4
-    n_head: int = 4
+    n_head: int = 6
     n_kv_head: int = 2
     n_embd: int = 384
     rope_theta: float = 10000.0
